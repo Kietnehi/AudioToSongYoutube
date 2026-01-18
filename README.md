@@ -1,8 +1,11 @@
-Audio To YouTube AI
+# 🎵 Audio To YouTube AI
 
-Upload audio → Whisper (speech-to-text) → Search YouTube (yt-dlp)
+Upload audio → **Whisper (Speech-to-Text)** → **Search YouTube (yt-dlp)**
 
-This project provides a small backend (FastAPI) that converts uploaded audio to WAV, transcribes it with Whisper, then searches YouTube for matching videos. The frontend is a React/Vite app that lets users record or upload audio and view matched videos.
+**Audio To YouTube AI** is a full-stack application that allows users to record or upload an audio clip, automatically transcribe it using OpenAI Whisper, and then search YouTube for matching songs or related videos.
+
+The backend is built with **FastAPI**, handling audio processing, WAV conversion, and transcription.  
+The frontend is developed using **React + Vite**, providing a simple and interactive interface for recording audio, uploading files, and viewing matched YouTube results.
 
 ## Demo
 

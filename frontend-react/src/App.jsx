@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-// Thêm icon 'X' vào import
-import { Upload, Music, Youtube, FileAudio, Loader2, CheckCircle2, Search, Play, ExternalLink, Mic, Square, Trash2, StopCircle, X } from 'lucide-react';
+import { Upload, Music, Youtube, FileAudio, Loader2, CheckCircle2, Search, Play, ExternalLink, Mic, Square, Trash2, StopCircle } from 'lucide-react';
+// GIỮ LẠI API CỦA BẠN ĐỂ KHÔNG HƯ BACKEND
 import { analyzeAudio } from "./api"; 
 
 const App = () => {
@@ -10,23 +10,12 @@ const App = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // --- NEW STATE FOR VIDEO PLAYER ---
-  const [selectedVideo, setSelectedVideo] = useState(null);
-
   // --- RECORDING STATE ---
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerIntervalRef = useRef(null);
-
-  // --- HELPER: GET YOUTUBE ID ---
-  // Hàm này giúp lấy ID video từ nhiều dạng link YouTube khác nhau
-  const getYouTubeID = (url) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  };
 
   // --- RECORDING LOGIC ---
   const startRecording = async (e) => {
@@ -122,7 +111,7 @@ const App = () => {
     if (fileInput) fileInput.value = '';
   };
 
-  // --- SUBMISSION LOGIC ---
+  // --- SUBMISSION LOGIC (SỬ DỤNG API CŨ CỦA BẠN) ---
   const handleSubmit = async () => {
     if (!file) return;
 
@@ -131,8 +120,13 @@ const App = () => {
     setResult(null);
 
     try {
+      // THAY VÌ FETCH TRỰC TIẾP, DÙNG HÀM analyzeAudio TỪ api.js CỦA BẠN
+      // Điều này đảm bảo backend không bị hư và logic cũ vẫn chạy tốt
       const data = await analyzeAudio(file);
+      
+      // Giả sử api.js trả về object { transcript: "...", videos: [...] }
       setResult(data); 
+
     } catch (err) {
       console.error(err);
       setError("Lỗi xử lý audio. Vui lòng kiểm tra backend.");
@@ -142,39 +136,7 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-slate-800 font-sans relative">
-      
-      {/* --- VIDEO PLAYER MODAL --- */}
-      {selectedVideo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setSelectedVideo(null)}>
-          <div className="bg-black w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl relative flex flex-col" onClick={e => e.stopPropagation()}>
-            
-            {/* Header Modal */}
-            <div className="flex items-center justify-between p-4 bg-gray-900 text-white">
-               <h3 className="text-lg font-semibold truncate pr-4">{selectedVideo.title}</h3>
-               <button 
-                onClick={() => setSelectedVideo(null)}
-                className="p-2 hover:bg-gray-700 rounded-full transition-colors"
-               >
-                 <X size={24} />
-               </button>
-            </div>
-
-            {/* Youtube Iframe */}
-            <div className="relative w-full aspect-video bg-black">
-              <iframe 
-                src={`https://www.youtube.com/embed/${getYouTubeID(selectedVideo.link)}?autoplay=1`} 
-                title={selectedVideo.title}
-                className="absolute inset-0 w-full h-full"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
-            </div>
-          </div>
-        </div>
-      )}
-
+    <div className="min-h-screen bg-gray-50 text-slate-800 font-sans">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -350,9 +312,8 @@ const App = () => {
                     result.videos.map((video, index) => (
                       <div 
                         key={video.id || index}
-                        // Sửa logic onClick tại đây: Set selectedVideo thay vì window.open
-                        onClick={() => setSelectedVideo(video)}
                         className="group bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex flex-col sm:flex-row gap-4 hover:shadow-md hover:border-red-200 transition-all cursor-pointer"
+                        onClick={() => window.open(video.link, '_blank')}
                       >
                         <div className="relative w-full sm:w-48 aspect-video rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
                           {video.thumbnail && (
@@ -380,15 +341,8 @@ const App = () => {
                                 {video.views}
                               </span>
                             )}
-                            <span 
-                                // Nếu muốn mở tab mới thì bấm vào link text nhỏ này
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    window.open(video.link, '_blank');
-                                }}
-                                className="flex items-center gap-1 text-xs text-red-600 font-medium ml-auto hover:underline z-10"
-                            >
-                              Mở tab mới <ExternalLink size={12} />
+                            <span className="flex items-center gap-1 text-xs text-red-600 font-medium ml-auto">
+                              Xem trên YouTube <ExternalLink size={12} />
                             </span>
                           </div>
                         </div>
