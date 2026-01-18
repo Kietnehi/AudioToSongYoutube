@@ -19,7 +19,7 @@ Click the image below to open the video on YouTube. When the video provides capt
 
 [![Preview YouTube](image/preview_youtube.png)](https://www.youtube.com)
 
-Image file: [image/preview_youtube.png](image/preview_youtube.png)
+
 
 
 ## Prerequisites
