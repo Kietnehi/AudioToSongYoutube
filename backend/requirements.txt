@@ -1,0 +1,8 @@
+uvicorn
+openai-whisper
+yt-dlp
+python-multipart
+torch
+os
+fastapi
+uuid

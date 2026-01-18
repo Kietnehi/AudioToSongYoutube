@@ -1,0 +1,9 @@
+.container {
+  max-width: 900px;
+  margin: auto;
+  font-family: Arial, sans-serif;
+}
+
+.video {
+  margin-bottom: 40px;
+}
