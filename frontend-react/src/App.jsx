@@ -1,58 +1,125 @@
 import React, { useState, useRef, useEffect } from 'react';
-// Đã thêm icon 'X' vào danh sách import
-import { Upload, Music, Youtube, FileAudio, Loader2, CheckCircle2, Search, Play, ExternalLink, Mic, Square, Trash2, StopCircle, X } from 'lucide-react';
-// GIỮ LẠI API CỦA BẠN
-import { analyzeAudio } from "./api"; 
+import YouTube from 'react-youtube'; // Thư viện Youtube Player
+import { 
+  Upload, Music, Youtube, FileAudio, Loader2, CheckCircle2, 
+  Search, Play, ExternalLink, Mic, Square, Trash2, StopCircle, 
+  X, AlignLeft ,Globe
+} from 'lucide-react';
+
+// Import 2 API: Phân tích audio & Lấy phụ đề
+import { analyzeAudio, fetchTranscript } from "./api"; 
 
 const App = () => {
+  // --- 1. STATE CŨ (QUẢN LÝ FILE & KẾT QUẢ) ---
   const [file, setFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [availableLangs, setAvailableLangs] = useState([]); // Danh sách ngôn ngữ có sẵn
+  const [currentLang, setCurrentLang] = useState("");       // Ngôn ngữ đang chọn
+  // --- 2. STATE VIDEO & LYRICS (MỚI) ---
+  const [selectedVideo, setSelectedVideo] = useState(null); // Video đang chọn
+  const [player, setPlayer] = useState(null);               // Instance của Youtube Player
+  const [currentTime, setCurrentTime] = useState(0);        // Thời gian thực (giây)
+  const [realLyrics, setRealLyrics] = useState([]);         // Mảng lời bài hát từ API
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false); // Loading khi tải sub
+  const activeLineRef = useRef(null);                       // Ref để tự động cuộn
 
-  // --- 1. STATE MỚI ĐỂ QUẢN LÝ VIDEO ĐANG PHÁT ---
-  const [selectedVideo, setSelectedVideo] = useState(null);
-
-  // --- RECORDING STATE ---
+  // --- 3. STATE RECORDING (THU ÂM) ---
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerIntervalRef = useRef(null);
 
-  // --- 2. HÀM TÁCH ID YOUTUBE (QUAN TRỌNG ĐỂ IRAME CHẠY) ---
-  // --- 2. HÀM TÁCH ID YOUTUBE (CẬP NHẬT: HỖ TRỢ SHORTS & DEBUG) ---
+  // --- HÀM TÁCH ID YOUTUBE (CẬP NHẬT: HỖ TRỢ SHORTS & CÁC DẠNG LINK) ---
   const getYouTubeID = (url) => {
-    if (!url) {
-      console.error("Link video bị rỗng hoặc undefined!");
-      return null;
-    }
-
-    // Log link ra Console để kiểm tra (Nhấn F12 > Console để xem)
-    console.log("Đang xử lý link:", url);
-
-    // Trường hợp 1: Backend trả về ID trực tiếp (11 ký tự)
+    if (!url) return null;
     if (url.length === 11) return url;
-
-    // Trường hợp 2: Link chứa 'shorts' (Youtube Shorts)
+    
+    // Hỗ trợ link Shorts
     if (url.includes("/shorts/")) {
       const shortsMatch = url.match(/shorts\/([\w-]{11})/);
       if (shortsMatch) return shortsMatch[1];
     }
 
-    // Trường hợp 3: Các dạng link thường (watch?v=, youtu.be, embed)
+    // Các dạng link thường
     url = url.replace(/(>|<)/gi,'').split(/(vi\/|v=|\/v\/|youtu\.be\/|\/embed\/)/);
     if(url[2] !== undefined) {
-      // Tách ID và loại bỏ các tham số phía sau (nếu có)
       const id = url[2].split(/[^0-9a-z_\-]/i);
       return id[0];
     }
-    
     return null;
   };
 
-  // --- RECORDING LOGIC ---
+  // --- LOGIC YOUTUBE PLAYER & SYNC LYRICS ---
+  
+  // Khi Player sẵn sàng, lưu instance lại để dùng lệnh seekTo, getCurrentTime
+  const onPlayerReady = (event) => {
+    setPlayer(event.target);
+  };
+
+  // Vòng lặp lấy thời gian hiện tại của video (0.5s/lần)
+  useEffect(() => {
+    let interval;
+    if (selectedVideo && player) {
+      interval = setInterval(() => {
+        const time = player.getCurrentTime(); 
+        setCurrentTime(time);
+      }, 500);
+    }
+    return () => clearInterval(interval);
+  }, [selectedVideo, player]);
+
+  // Tự động cuộn xuống dòng đang hát (Active Line)
+  useEffect(() => {
+    if (activeLineRef.current) {
+      activeLineRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+  }, [currentTime]);
+
+  // --- HÀM MỚI: TẢI DỮ LIỆU (LYRICS + NGÔN NGỮ) ---
+  const loadTranscriptData = async (videoId, langCode = null) => {
+      setIsLoadingLyrics(true);
+      
+      // Gọi API (Hàm này đã sửa bên api.js để trả về object chứa cả languages)
+      const data = await fetchTranscript(videoId, langCode);
+      
+      setRealLyrics(data.lyrics);       // Lưu lời bài hát
+      setAvailableLangs(data.languages); // Lưu danh sách ngôn ngữ (để hiện menu)
+      setCurrentLang(data.current_lang); // Lưu ngôn ngữ hiện tại
+      
+      setIsLoadingLyrics(false);
+  };
+
+  // --- HÀM MỚI: XỬ LÝ KHI NGƯỜI DÙNG ĐỔI NGÔN NGỮ ---
+  const handleChangeLanguage = (e) => {
+    const newLang = e.target.value;
+    const videoId = selectedVideo.id || getYouTubeID(selectedVideo.url || selectedVideo.link);
+    
+    // Nếu chọn ngôn ngữ khác cái hiện tại thì tải lại
+    if (videoId && newLang !== currentLang) {
+        loadTranscriptData(videoId, newLang);
+    }
+  };
+
+  // --- SỬA LẠI HÀM NÀY: KHI CLICK CHỌN VIDEO ---
+  const handleSelectVideo = (video) => {
+    setSelectedVideo(video);
+    setRealLyrics([]);
+    setAvailableLangs([]); // Reset danh sách ngôn ngữ cũ
+    
+    const videoId = video.id || getYouTubeID(video.url || video.link);
+    if (videoId) {
+        loadTranscriptData(videoId); // Gọi lần đầu (không tham số lang)
+    }
+  };
+
+  // --- RECORDING FUNCTIONS ---
   const startRecording = async (e) => {
     e.stopPropagation();
     setError(null);
@@ -106,15 +173,9 @@ const App = () => {
   };
 
   // --- FILE HANDLING LOGIC ---
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = () => { setIsDragging(false); };
+  
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
@@ -159,7 +220,7 @@ const App = () => {
       setResult(data); 
     } catch (err) {
       console.error(err);
-      setError("Lỗi xử lý audio. Vui lòng kiểm tra backend.");
+      setError("Lỗi xử lý audio. Vui lòng kiểm tra backend (Port 8000).");
     } finally {
       setIsLoading(false);
     }
@@ -168,85 +229,131 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gray-50 text-slate-800 font-sans relative">
       
-      {/* --- 3. GIAO DIỆN MODAL PHÁT VIDEO --- */}
-      {/* --- VIDEO PLAYER MODAL (ĐÃ SỬA LỖI UNDEFINED) --- */}
+      {/* --- MODAL PLAYER MỚI (CHIA 2 CỘT: VIDEO + LYRICS) --- */}
       {selectedVideo && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-          onClick={() => setSelectedVideo(null)}
+          onClick={() => { setSelectedVideo(null); setPlayer(null); }}
         >
           <div 
-            className="bg-black w-full max-w-4xl rounded-xl overflow-hidden shadow-2xl flex flex-col relative border border-gray-800"
+            className="bg-black w-full max-w-6xl h-[80vh] rounded-xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative border border-gray-800"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header Modal */}
-            <div className="flex items-center justify-between p-4 bg-gray-900 text-white border-b border-gray-800">
-               <h3 className="text-lg font-semibold truncate pr-4 text-gray-100">
-                 {selectedVideo.title}
-               </h3>
-               <button 
-                onClick={() => setSelectedVideo(null)}
-                className="p-2 hover:bg-red-600 rounded-full transition-colors text-white"
-               >
-                 <X size={24} />
-               </button>
-            </div>
-
-            {/* Khung phát video */}
-            <div className="relative w-full aspect-video bg-black flex items-center justify-center">
-              {(() => {
-                // LOGIC TÌM ID THÔNG MINH:
-                // 1. Ưu tiên lấy ID trực tiếp nếu có
-                let videoId = selectedVideo.id;
+            {/* CỘT 1: VIDEO PLAYER */}
+            <div className="flex-1 flex flex-col bg-black relative group">
+                <div className="flex items-center justify-between p-3 bg-gray-900 text-white border-b border-gray-800">
+                    <h3 className="text-sm font-semibold truncate pr-4 text-gray-100">
+                        {selectedVideo.title}
+                    </h3>
+                </div>
                 
-                // 2. Nếu không có ID, thử tách từ 'link' hoặc 'url'
-                if (!videoId) {
-                    const possibleUrl = selectedVideo.link || selectedVideo.url; 
-                    videoId = getYouTubeID(possibleUrl);
-                }
-
-                if (videoId) {
-                  return (
-                    <iframe 
-                      src={`https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0`} 
-                      title={selectedVideo.title}
-                      className="absolute inset-0 w-full h-full"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                    ></iframe>
-                  );
-                } else {
-                  return (
-                    <div className="text-white text-center p-10 space-y-2">
-                      <p className="text-red-500 font-bold text-xl">Không tìm thấy ID Video</p>
-                      <p className="text-gray-400">Dữ liệu video bị thiếu trường 'link' hoặc 'id'.</p>
-                      <pre className="text-xs text-left bg-gray-800 p-4 rounded mt-4 overflow-auto max-w-md mx-auto">
-                        {JSON.stringify(selectedVideo, null, 2)}
-                      </pre>
-                    </div>
-                  );
-                }
-              })()}
+                <div className="flex-1 relative bg-black flex items-center justify-center">
+                    {(() => {
+                        const videoId = selectedVideo.id || getYouTubeID(selectedVideo.url || selectedVideo.link);
+                        if (videoId) {
+                            return (
+                                <YouTube
+                                    videoId={videoId}
+                                    className="w-full h-full absolute inset-0"
+                                    iframeClassName="w-full h-full"
+                                    onReady={onPlayerReady}
+                                    opts={{
+                                        playerVars: { autoplay: 1, playsinline: 1, rel: 0 }
+                                    }}
+                                />
+                            );
+                        } else {
+                            return <p className="text-red-500">Lỗi: Không tìm thấy ID Video</p>;
+                        }
+                    })()}
+                </div>
             </div>
-            
-            {/* Footer Modal */}
-            <div className="p-3 bg-gray-900 border-t border-gray-800 flex justify-end">
-                <button
-                    onClick={() => {
-                        // Thử mở link dự phòng (link hoặc url)
-                        const targetLink = selectedVideo.link || selectedVideo.url || `https://www.youtube.com/watch?v=${selectedVideo.id}`;
-                        if(targetLink) window.open(targetLink, '_blank');
-                    }}
-                    className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                    <ExternalLink size={14} /> Mở bằng tab mới (Dự phòng)
-                </button>
+
+            {/* CỘT 2: LYRICS TIMELINE */}
+            <div className="w-full md:w-80 bg-gray-900 border-l border-gray-800 flex flex-col h-full">
+                <div className="p-4 border-b border-gray-800 bg-gray-900 flex justify-between items-center">
+                    <h4 className="text-white font-bold flex items-center gap-2">
+                        <AlignLeft size={18} className="text-red-500"/> Lời bài hát (CC)
+                    </h4>
+                    <button 
+                        onClick={() => setSelectedVideo(null)} 
+                        className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                            {/* --- THÊM ĐOẠN NÀY: MENU CHỌN NGÔN NGỮ --- */}
+                {availableLangs.length > 0 && (
+                    <div className="flex items-center gap-2 bg-gray-800 rounded px-2 py-1.5 border border-gray-700">
+                        <Globe size={14} className="text-blue-400"/>
+                        <select 
+                            value={currentLang} 
+                            onChange={handleChangeLanguage}
+                            className="bg-transparent text-xs text-white w-full outline-none cursor-pointer"
+                        >
+                            {availableLangs.map((lang, idx) => (
+                                <option key={idx} value={lang.code} className="text-black">
+                                    {lang.name} {lang.is_generated ? '(Auto)' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}       
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                    {isLoadingLyrics ? (
+                        <div className="flex flex-col items-center justify-center h-40 text-gray-500 gap-3">
+                            <Loader2 className="animate-spin text-red-500" size={24} />
+                            <p className="text-xs">Đang tải phụ đề...</p>
+                        </div>
+                    ) : realLyrics.length > 0 ? (
+                       realLyrics.map((line, index) => {
+                        // --- SỬA Ở ĐÂY ---
+                        // 1. Lấy thời gian bắt đầu của dòng kế tiếp (nếu là dòng cuối thì lấy Infinity)
+                        const nextLineStart = realLyrics[index + 1]?.start || Infinity;
+
+                        // 2. Tính thời điểm kết thúc thực tế (Cắt ngắn nếu dòng sau chèn vào)
+                        // Lấy giá trị NHỎ HƠN giữa: (End của dòng hiện tại) và (Start của dòng sau)
+                        const activeEndTime = Math.min(line.end, nextLineStart);
+
+                        // 3. Kiểm tra active bằng thời gian mới
+                        const isActive = currentTime >= line.start && currentTime < activeEndTime;
+                        // ------------------
+
+                        return (
+                            <div 
+                                key={index}
+                                ref={isActive ? activeLineRef : null} // Gắn ref để auto scroll
+                                onClick={() => player && player.seekTo(line.start, true)} // Click để tua
+                                className={`
+                                    group cursor-pointer transition-all duration-300 p-3 rounded-lg text-sm leading-relaxed border border-transparent
+                                    ${isActive 
+                                        ? 'bg-red-600 text-white shadow-lg scale-[1.02] font-medium' 
+                                        : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                                    }
+                                `}
+                            >
+                                <div className={`flex justify-between mb-1 text-[10px] font-mono tracking-wider opacity-60 ${isActive ? 'text-gray-200' : ''}`}>
+                                    {/* Format thời gian hiển thị */}
+                                    <span>{formatTime(Math.floor(line.start))}</span>
+                                </div>
+                                <p>{line.text}</p>
+                            </div>
+                        );
+                    })
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-40 text-gray-500 p-4 text-center">
+                            <Music size={32} className="mb-2 opacity-20" />
+                            <p className="text-sm font-medium text-gray-400">Không có lời bài hát</p>
+                            <p className="text-xs mt-1 opacity-60">Video này chưa có phụ đề hoặc không hỗ trợ.</p>
+                        </div>
+                    )}
+                </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* HEADER */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -271,7 +378,7 @@ const App = () => {
           </p>
         </div>
 
-        {/* --- MAIN INTERACTION AREA --- */}
+        {/* --- MAIN INTERACTION AREA (Upload / Record) --- */}
         <div 
           className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ease-in-out cursor-pointer overflow-hidden
             ${isDragging ? 'border-red-500 bg-red-50 scale-[1.02]' : 'border-gray-300 bg-white hover:border-red-400 hover:bg-gray-50'}
@@ -320,7 +427,7 @@ const App = () => {
                 <p className="text-sm text-gray-500 mb-6">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                 
                 <div className="flex justify-center gap-3">
-                   <button 
+                    <button 
                     onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
                     className="px-6 py-2 bg-green-600 text-white rounded-full font-medium hover:bg-green-700 shadow-lg shadow-green-200 transition-all hover:-translate-y-1"
                   >
@@ -392,11 +499,12 @@ const App = () => {
           </div>
         )}
 
-        {/* RESULTS */}
+        {/* RESULTS GRID */}
         {result && (
           <div className="animate-in slide-in-from-bottom-5 duration-500 space-y-8 pb-10">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
+              {/* Cột Trái: Transcript */}
               <div className="md:col-span-1 space-y-4">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 h-full flex flex-col">
                   <div className="flex items-center gap-2 mb-4 text-purple-700">
@@ -409,6 +517,7 @@ const App = () => {
                 </div>
               </div>
 
+              {/* Cột Phải: Danh sách Video */}
               <div className="md:col-span-2 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-red-600">
@@ -422,12 +531,8 @@ const App = () => {
                     result.videos.map((video, index) => (
                       <div 
                         key={video.id || index}
-                        // --- 4. SỰ KIỆN CLICK ĐỂ MỞ MODAL ---
-                        // Tìm đoạn code này trong phần render kết quả:
-                        onClick={() => {
-                            console.log("Dữ liệu video:", video); // <--- Thêm dòng này để soi dữ liệu
-                            setSelectedVideo(video);
-                        }}
+                        // CLICK VÀO ĐÂY GỌI HÀM MỞ MODAL & TẢI SUB
+                        onClick={() => handleSelectVideo(video)} 
                         className="group bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex flex-col sm:flex-row gap-4 hover:shadow-md hover:border-red-200 transition-all cursor-pointer"
                       >
                         <div className="relative w-full sm:w-48 aspect-video rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
@@ -459,7 +564,7 @@ const App = () => {
                             <span 
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    window.open(video.link, '_blank');
+                                    window.open(video.url || video.link, '_blank');
                                 }}
                                 className="flex items-center gap-1 text-xs text-red-600 font-medium ml-auto hover:underline z-10"
                             >

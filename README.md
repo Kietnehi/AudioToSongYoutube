@@ -11,7 +11,15 @@ The frontend is developed using **React + Vite**, providing a simple and interac
 
 Screenshot of a sample search result (place the image file at `frontend-react/screenshots/result.png` or update the path to your hosted image):
 
-![Kết quả tìm thấy](image/frontend.png)
+![Results Founded](image/frontend.png)
+
+### YouTube preview & transcript
+
+Click the image below to open the video on YouTube. When the video provides captions (transcript/CC) the app will display them in the right-hand panel; you can click a transcript line to jump to that time in the video or edit/replace it if YouTube provides editable captions.
+
+[![Preview YouTube](image/preview_youtube.png)](https://www.youtube.com)
+
+Image file: [image/preview_youtube.png](image/preview_youtube.png)
 
 
 ## Prerequisites
